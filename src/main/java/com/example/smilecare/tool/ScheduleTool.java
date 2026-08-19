@@ -1,132 +1,50 @@
 package com.example.smilecare.tool;
 
 import com.example.smilecare.entity.Appointment;
-import com.example.smilecare.entity.Doctor;
-import com.example.smilecare.entity.TimeSlot;
 import com.example.smilecare.service.AppointmentService;
-import com.example.smilecare.service.DoctorService;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 public class ScheduleTool {
 
-    private static final int OPEN_HOUR = 9;
-    private static final int CLOSE_HOUR = 17;
-    private static final int SLOT_DURATION_MINUTES = 30;
-    private static final DateTimeFormatter SLOT_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private final AppointmentService appointmentService;
-    private final DoctorService doctorService;
 
-    public ScheduleTool(AppointmentService appointmentService, DoctorService doctorService) {
+    public ScheduleTool(AppointmentService appointmentService) {
         this.appointmentService = appointmentService;
-        this.doctorService = doctorService;
     }
-
-    @Tool(name = "checkAvailableSlots",
-            description = """
-                    Kiểm tra các khung giờ còn trống của một bác sĩ trong một ngày cụ thể.
-                    Sử dụng khi khách hàng muốn xem lịch trống của bác sĩ,
-                    muốn biết bác sĩ nào rảnh vào ngày nào, hoặc muốn đặt lịch
-                    khám và cần chọn khung giờ phù hợp.
-                    Lưu ý: Tool này chỉ tra cứu thông tin, KHÔNG đặt lịch.
-                    """)
-    public String checkAvailableSlots(
-            @ToolParam(description = "ID của bác sĩ cần tra cứu lịch trống") Long doctorId,
-            @ToolParam(description = "Ngày cần tra cứu theo định dạng yyyy-MM-dd (ví dụ: 2025-08-25)") String date) {
-
-        Doctor doctor;
+    @Tool(name = "rescheduleBooking",
+            description = "Đổi lịch hẹn sang ngày/giờ mới. "
+                    + "Tự động kiểm tra khung giờ mới còn trống trước khi cập nhật. "
+                    + "Cần mã lịch hẹn, số điện thoại và thời gian mới (định dạng: dd/MM/yyyy HH:mm).")
+    public String rescheduleBooking(
+            @ToolParam(description = "Mã lịch hẹn cần đổi (ID, ví dụ: 5)") Long appointmentId,
+            @ToolParam(description = "Số điện thoại của bệnh nhân để xác minh quyền sở hữu") String patientPhone,
+            @ToolParam(description = "Ngày giờ mới muốn đổi sang, định dạng dd/MM/yyyy HH:mm, ví dụ: 25/08/2026 10:00") String newDateTimeStr) {
+        LocalDateTime newDateTime;
         try {
-            doctor = doctorService.findById(doctorId);
-        } catch (IllegalArgumentException e) {
-            return "Không tìm thấy bác sĩ với ID " + doctorId;
-        }
-
-        LocalDate targetDate;
-        try {
-            targetDate = LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
+            newDateTime = LocalDateTime.parse(newDateTimeStr.trim(), FORMATTER);
         } catch (DateTimeParseException e) {
-            return "Định dạng ngày không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd (ví dụ: 2025-08-25).";
+            return "Định dạng thời gian không hợp lệ. Vui lòng dùng định dạng: dd/MM/yyyy HH:mm (ví dụ: 25/08/2026 10:00)";
         }
-
-        if (targetDate.isBefore(LocalDate.now())) {
-            return "Ngày " + date + " đã qua, vui lòng chọn ngày khác.";
-        }
-
-        List<Appointment> bookedAppointments = appointmentService.getBookedSlots(doctorId, targetDate);
-
-        Set<LocalTime> bookedTimes = bookedAppointments.stream()
-                .map(a -> a.getAppointmentDateTime().toLocalTime())
-                .collect(Collectors.toSet());
-
-        List<String> availableSlots = new ArrayList<>();
-        for (int hour = OPEN_HOUR; hour < CLOSE_HOUR; hour++) {
-            for (int minute = 0; minute < 60; minute += SLOT_DURATION_MINUTES) {
-                LocalTime slot = LocalTime.of(hour, minute);
-                if (!bookedTimes.contains(slot)) {
-                    availableSlots.add(slot.format(DateTimeFormatter.ofPattern("HH:mm")));
-                }
-            }
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("Lịch trống của bác sĩ ").append(doctor.getName())
-                .append(" ngày ").append(date).append(":\n");
-
-        if (availableSlots.isEmpty()) {
-            sb.append("Không còn khung giờ trống trong ngày này.");
-        } else {
-            sb.append("Còn trống ").append(availableSlots.size()).append(" khung giờ:\n");
-            sb.append(String.join(", ", availableSlots));
-        }
-
-        return sb.toString();
-    }
-
-    @Tool(name = "getAvailableTimeSlots",
-            description = """
-                    Lấy danh sách khung giờ còn trống của một bác sĩ cho một dịch vụ cụ thể trong một ngày.
-                    Sử dụng khi khách muốn xem lịch trống, chọn khung giờ đặt lịch, hoặc khi khung giờ
-                    muốn đặt đã hết chỗ cần gợi ý giờ khác.
-                    Lưu ý: Tool này chỉ tra cứu thông tin, KHÔNG đặt lịch. Dịch vụ khác nhau có thời gian
-                    thực hiện khác nhau nên khung giờ trống sẽ khác nhau.
-                    """)
-    public String getAvailableTimeSlots(
-            @ToolParam(description = "ID của bác sĩ cần tra cứu (xem list_all_doctors)") Long doctorId,
-            @ToolParam(description = "ID của dịch vụ cần đặt (xem list_all_services)") Long serviceId,
-            @ToolParam(description = "Ngày cần tra cứu, định dạng yyyy-MM-dd (ví dụ: 2026-08-20)") String date) {
-
-        LocalDate targetDate;
         try {
-            targetDate = LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
-        } catch (DateTimeParseException e) {
-            return "Định dạng ngày không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd (ví dụ: 2026-08-20).";
-        }
-
-        try {
-            List<TimeSlot> slots = appointmentService.getAvailableTimeSlots(doctorId, serviceId, targetDate);
-            if (slots.isEmpty()) {
-                return "Ngày " + date + " không còn khung giờ trống cho bác sĩ ID " + doctorId
-                        + " với dịch vụ ID " + serviceId + ". Vui lòng chọn ngày khác.";
-            }
-            String slotList = slots.stream()
-                    .map(s -> s.getStartTime().format(SLOT_FORMAT) + " - " + s.getEndTime().format(SLOT_FORMAT))
-                    .collect(Collectors.joining(", "));
-            return "Các khung giờ trống của bác sĩ ID " + doctorId
-                    + " với dịch vụ ID " + serviceId + " ngày " + date + ": " + slotList;
+            Appointment updated = appointmentService.rescheduleAppointment(appointmentId, patientPhone.trim(), newDateTime);
+            return "Đã đổi lịch thành công!\n"
+                    + "  • Mã lịch hẹn: #" + updated.getId() + "\n"
+                    + "  • Bệnh nhân: " + updated.getPatientName() + "\n"
+                    + "  • Bác sĩ: " + updated.getDoctor().getName() + "\n"
+                    + "  • Dịch vụ: " + updated.getDentalService().getName() + "\n"
+                    + "  • Thời gian mới: " + updated.getAppointmentDateTime().format(FORMATTER) + "\n"
+                    + "  • Trạng thái: " + updated.getStatus();
         } catch (IllegalArgumentException e) {
-            return e.getMessage();
+            return "Không thể đổi lịch: " + e.getMessage();
         }
     }
 }

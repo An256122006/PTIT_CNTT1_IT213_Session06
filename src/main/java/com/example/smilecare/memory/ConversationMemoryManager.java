@@ -1,35 +1,55 @@
 package com.example.smilecare.memory;
 
-import com.example.smilecare.dto.ChatMessageDto;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class ConversationMemoryManager {
 
-    private final Map<Long, List<ChatMessageDto>> memoryStore = new ConcurrentHashMap<>();
+    private final ChatMemory chatMemory;
+    private final Map<String, Long> lastActiveAt = new ConcurrentHashMap<>();
 
-    public void addMessage(Long conversationId, String role, String content) {
-        memoryStore.computeIfAbsent(conversationId, id -> Collections.synchronizedList(new ArrayList<>()))
-                .add(new ChatMessageDto(role, content));
+    public ConversationMemoryManager(ChatMemory chatMemory) {
+        this.chatMemory = chatMemory;
     }
 
-    public List<ChatMessageDto> getHistory(Long conversationId) {
-        List<ChatMessageDto> history = memoryStore.get(conversationId);
-        if (history == null) {
-            return Collections.emptyList();
-        }
-        synchronized (history) {
-            return new ArrayList<>(history);
-        }
+    public String getOrCreateConversationId(String requestedId) {
+        String conversationId = (requestedId == null || requestedId.isBlank())
+                ? UUID.randomUUID().toString()
+                : requestedId.trim();
+        track(conversationId);
+        return conversationId;
     }
 
-    public void clearHistory(Long conversationId) {
-        memoryStore.remove(conversationId);
+    public boolean isNewConversation(String conversationId) {
+        return !lastActiveAt.containsKey(conversationId);
+    }
+
+    public void track(String conversationId) {
+        lastActiveAt.put(conversationId, System.currentTimeMillis());
+    }
+
+    public void clear(String conversationId) {
+        chatMemory.clear(conversationId);
+        lastActiveAt.remove(conversationId);
+    }
+
+    public List<Message> getHistory(String conversationId) {
+        return chatMemory.get(conversationId);
+    }
+
+    public Set<String> getActiveConversations() {
+        return lastActiveAt.keySet();
+    }
+
+    public int getActiveConversationCount() {
+        return lastActiveAt.size();
     }
 }

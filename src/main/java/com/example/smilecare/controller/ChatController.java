@@ -1,66 +1,53 @@
 package com.example.smilecare.controller;
 
-import com.example.smilecare.dto.ChatMessageDto;
+import com.example.smilecare.dto.AppointmentRequest;
 import com.example.smilecare.dto.ChatRequest;
 import com.example.smilecare.dto.ChatResponse;
+import com.example.smilecare.entity.Appointment;
+import com.example.smilecare.service.AppointmentService;
 import com.example.smilecare.service.ChatService;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/chat")
+@RequestMapping("/api")
 public class ChatController {
 
     private final ChatService chatService;
+    private final AppointmentService appointmentService;
 
-    public ChatController(ChatService chatService) {
+    public ChatController(ChatService chatService, AppointmentService appointmentService) {
         this.chatService = chatService;
+        this.appointmentService = appointmentService;
     }
 
-    /**
-     * Main REST API Endpoint for sending chat messages.
-     * POST /api/chat
-     */
-    @PostMapping
-    public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
-        ChatResponse response = chatService.sendMessage(request);
-        return ResponseEntity.ok(response);
+    @PostMapping("/chat")
+    public ChatResponse chat(@Valid @RequestBody ChatRequest request) {
+        return chatService.chat(request);
     }
 
-    /**
-     * API to reset/delete chat session history.
-     * DELETE /api/chat/{conversationId}
-     */
-    @DeleteMapping("/{conversationId}")
-    public ResponseEntity<Map<String, String>> deleteSession(@PathVariable Long conversationId) {
-        chatService.deleteSession(conversationId);
-        return ResponseEntity.ok(Map.of(
-                "message", "Đã xóa lịch sử phiên trò chuyện thành công",
-                "conversationId", String.valueOf(conversationId)
-        ));
+    @PostMapping("/chat/reset")
+    public Map<String, String> reset(@RequestBody ChatRequest request) {
+        String conversationId = request.conversationId();
+        if (conversationId == null || conversationId.isBlank()) {
+            return Map.of("message", "Thiếu conversationId, không thể xóa hội thoại");
+        }
+        chatService.resetConversation(conversationId);
+        return Map.of("message", "Đã xóa bộ nhớ hội thoại " + conversationId);
     }
 
-    /**
-     * API to retrieve chat history list for a session.
-     * GET /api/chat/{conversationId}/history
-     */
-    @GetMapping("/{conversationId}/history")
-    public ResponseEntity<List<ChatMessageDto>> getHistory(@PathVariable Long conversationId) {
-        List<ChatMessageDto> history = chatService.getHistory(conversationId);
-        return ResponseEntity.ok(history);
-    }
-
-    /**
-     * Alias endpoint to retrieve chat history list directly by conversationId.
-     * GET /api/chat/{conversationId}
-     */
-    @GetMapping("/{conversationId}")
-    public ResponseEntity<List<ChatMessageDto>> getHistoryByPath(@PathVariable Long conversationId) {
-        List<ChatMessageDto> history = chatService.getHistory(conversationId);
-        return ResponseEntity.ok(history);
+    @PostMapping("/appointments")
+    public Appointment bookAppointment(@Valid @RequestBody AppointmentRequest request) {
+        return appointmentService.bookAppointment(
+                request.patientName(),
+                request.patientPhone(),
+                request.doctorId(),
+                request.serviceId(),
+                request.appointmentDateTime());
     }
 }

@@ -18,30 +18,14 @@ public class ServiceTool {
         this.serviceCatalogService = serviceCatalogService;
     }
 
-    @Tool(name = "searchDentalServices",
-            description = """
-                    Tra cứu dịch vụ nha khoa tại phòng khám SmileCare.
-                    Sử dụng khi khách hàng muốn biết danh sách dịch vụ,
-                    tìm kiếm dịch vụ theo tên hoặc mô tả, hoặc hỏi về
-                    giá cả của một dịch vụ nha khoa cụ thể (ví dụ:
-                    niềng răng, tẩy trắng răng, bọc răng sứ, nhổ răng khôn,
-                    cạo vôi, trám răng...).
-                    """)
-    public String searchDentalServices(
-            @ToolParam(description = "Từ khóa tìm kiếm tên hoặc mô tả dịch vụ nha khoa (ví dụ: niềng răng, tẩy trắng, sứ)") String keyword) {
-        List<DentalService> services = serviceCatalogService.search(keyword);
-        return formatServices(services);
+    @Tool(name = "list_all_services", description = "Liệt kê tất cả dịch vụ nha khoa và bảng giá của phòng khám")
+    public String listAllServices() {
+        return formatServices(serviceCatalogService.findAll());
     }
 
-    @Tool(name = "listAllDentalServices",
-            description = """
-                    Liệt kê toàn bộ dịch vụ nha khoa có tại phòng khám SmileCare.
-                    Sử dụng khi khách hàng muốn xem danh sách tất cả các dịch vụ
-                    hoặc chưa biết muốn sử dụng dịch vụ nào.
-                    """)
-    public String listAllDentalServices() {
-        List<DentalService> services = serviceCatalogService.findAll();
-        return formatServices(services);
+    @Tool(name = "search_services", description = "Tìm kiếm dịch vụ nha khoa theo tên hoặc mô tả")
+    public String searchServices(@ToolParam(description = "Từ khóa tìm kiếm dịch vụ") String keyword) {
+        return formatServices(serviceCatalogService.search(keyword));
     }
 
     private String formatServices(List<DentalService> services) {
