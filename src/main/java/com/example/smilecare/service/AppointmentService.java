@@ -120,4 +120,4 @@ public class AppointmentService {
             throw new IllegalArgumentException("Không thể đặt lịch ở thời điểm đã qua");
         }
     }
-}
+}

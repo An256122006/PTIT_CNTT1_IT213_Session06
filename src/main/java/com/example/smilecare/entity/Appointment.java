@@ -47,6 +47,9 @@ public class Appointment {
     @Column(nullable = false)
     private String status = "CONFIRMED";
 
+    @Column(unique = true)
+    private String bookingCode;
+
     private String note;
 
     @Column(nullable = false)
@@ -64,6 +67,19 @@ public class Appointment {
         this.dentalService = dentalService;
         this.appointmentDateTime = appointmentDateTime;
         this.status = status;
+        this.note = note;
+    }
+
+    public Appointment(String patientName, String patientPhone, Doctor doctor,
+                       DentalService dentalService, LocalDateTime appointmentDateTime,
+                       String status, String bookingCode, String note) {
+        this.patientName = patientName;
+        this.patientPhone = patientPhone;
+        this.doctor = doctor;
+        this.dentalService = dentalService;
+        this.appointmentDateTime = appointmentDateTime;
+        this.status = status;
+        this.bookingCode = bookingCode;
         this.note = note;
     }
 
@@ -121,6 +137,14 @@ public class Appointment {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getBookingCode() {
+        return bookingCode;
+    }
+
+    public void setBookingCode(String bookingCode) {
+        this.bookingCode = bookingCode;
     }
 
     public String getNote() {
