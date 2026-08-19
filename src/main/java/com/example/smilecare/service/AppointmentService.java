@@ -56,6 +56,12 @@ public class AppointmentService {
     }
 
     @Transactional(readOnly = true)
+    public Appointment findById(Long id) {
+        return appointmentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy lịch hẹn với mã: " + id));
+    }
+
+    @Transactional(readOnly = true)
     public boolean isSlotBooked(Long doctorId, LocalDateTime dateTime) {
         return appointmentRepository.existsByDoctorIdAndAppointmentDateTime(doctorId, dateTime);
     }
@@ -66,6 +72,46 @@ public class AppointmentService {
                 doctorId, date.atStartOfDay(), date.plusDays(1).atStartOfDay());
     }
 
+    /**
+     * UC-04: Hủy lịch hẹn, giải phóng khung giờ (đổi status → CANCELLED).
+     * Xác minh quyền sở hữu bằng mã lịch hẹn + số điện thoại.
+     */
+    @Transactional
+    public Appointment cancelAppointment(Long appointmentId, String patientPhone) {
+        Appointment appointment = appointmentRepository.findByIdAndPatientPhone(appointmentId, patientPhone)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Không tìm thấy lịch hẹn #" + appointmentId + " với số điện thoại " + patientPhone));
+        if ("CANCELLED".equals(appointment.getStatus())) {
+            throw new IllegalArgumentException("Lịch hẹn #" + appointmentId + " đã bị hủy trước đó");
+        }
+        appointment.setStatus("CANCELLED");
+        return appointmentRepository.save(appointment);
+    }
+
+    /**
+     * UC-05: Đổi lịch hẹn sang ngày/giờ mới.
+     * Kiểm tra slot mới còn trống trước khi cập nhật.
+     */
+    @Transactional
+    public Appointment rescheduleAppointment(Long appointmentId, String patientPhone,
+                                             LocalDateTime newDateTime) {
+        Appointment appointment = appointmentRepository.findByIdAndPatientPhone(appointmentId, patientPhone)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Không tìm thấy lịch hẹn #" + appointmentId + " với số điện thoại " + patientPhone));
+        if ("CANCELLED".equals(appointment.getStatus())) {
+            throw new IllegalArgumentException("Lịch hẹn #" + appointmentId + " đã bị hủy, không thể đổi lịch");
+        }
+        validateBusinessHours(newDateTime);
+        Long doctorId = appointment.getDoctor().getId();
+        if (appointmentRepository.existsByDoctorIdAndAppointmentDateTime(doctorId, newDateTime)) {
+            throw new IllegalArgumentException(
+                    "Khung giờ " + newDateTime + " đã có người đặt, vui lòng chọn giờ khác");
+        }
+        appointment.setAppointmentDateTime(newDateTime);
+        appointment.setStatus("CONFIRMED");
+        return appointmentRepository.save(appointment);
+    }
+
     private void validateBusinessHours(LocalDateTime dateTime) {
         if (dateTime.getHour() < OPEN_HOUR || dateTime.getHour() >= CLOSE_HOUR) {
             throw new IllegalArgumentException("Phòng khám chỉ nhận lịch hẹn trong khoảng 09:00 - 17:00");
@@ -74,4 +120,4 @@ public class AppointmentService {
             throw new IllegalArgumentException("Không thể đặt lịch ở thời điểm đã qua");
         }
     }
-}
+}
