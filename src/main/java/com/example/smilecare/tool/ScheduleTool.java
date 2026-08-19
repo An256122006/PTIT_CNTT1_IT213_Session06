@@ -2,6 +2,7 @@ package com.example.smilecare.tool;
 
 import com.example.smilecare.entity.Appointment;
 import com.example.smilecare.entity.Doctor;
+import com.example.smilecare.entity.TimeSlot;
 import com.example.smilecare.service.AppointmentService;
 import com.example.smilecare.service.DoctorService;
 import org.springframework.ai.tool.annotation.Tool;
@@ -23,6 +24,7 @@ public class ScheduleTool {
     private static final int OPEN_HOUR = 9;
     private static final int CLOSE_HOUR = 17;
     private static final int SLOT_DURATION_MINUTES = 30;
+    private static final DateTimeFormatter SLOT_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AppointmentService appointmentService;
     private final DoctorService doctorService;
@@ -90,5 +92,41 @@ public class ScheduleTool {
         }
 
         return sb.toString();
+    }
+
+    @Tool(name = "getAvailableTimeSlots",
+            description = """
+                    Lấy danh sách khung giờ còn trống của một bác sĩ cho một dịch vụ cụ thể trong một ngày.
+                    Sử dụng khi khách muốn xem lịch trống, chọn khung giờ đặt lịch, hoặc khi khung giờ
+                    muốn đặt đã hết chỗ cần gợi ý giờ khác.
+                    Lưu ý: Tool này chỉ tra cứu thông tin, KHÔNG đặt lịch. Dịch vụ khác nhau có thời gian
+                    thực hiện khác nhau nên khung giờ trống sẽ khác nhau.
+                    """)
+    public String getAvailableTimeSlots(
+            @ToolParam(description = "ID của bác sĩ cần tra cứu (xem list_all_doctors)") Long doctorId,
+            @ToolParam(description = "ID của dịch vụ cần đặt (xem list_all_services)") Long serviceId,
+            @ToolParam(description = "Ngày cần tra cứu, định dạng yyyy-MM-dd (ví dụ: 2026-08-20)") String date) {
+
+        LocalDate targetDate;
+        try {
+            targetDate = LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE);
+        } catch (DateTimeParseException e) {
+            return "Định dạng ngày không hợp lệ. Vui lòng sử dụng định dạng yyyy-MM-dd (ví dụ: 2026-08-20).";
+        }
+
+        try {
+            List<TimeSlot> slots = appointmentService.getAvailableTimeSlots(doctorId, serviceId, targetDate);
+            if (slots.isEmpty()) {
+                return "Ngày " + date + " không còn khung giờ trống cho bác sĩ ID " + doctorId
+                        + " với dịch vụ ID " + serviceId + ". Vui lòng chọn ngày khác.";
+            }
+            String slotList = slots.stream()
+                    .map(s -> s.getStartTime().format(SLOT_FORMAT) + " - " + s.getEndTime().format(SLOT_FORMAT))
+                    .collect(Collectors.joining(", "));
+            return "Các khung giờ trống của bác sĩ ID " + doctorId
+                    + " với dịch vụ ID " + serviceId + " ngày " + date + ": " + slotList;
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        }
     }
 }

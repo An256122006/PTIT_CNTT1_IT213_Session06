@@ -1,5 +1,6 @@
 package com.example.smilecare.config;
 
+import com.example.smilecare.tool.AppointmentTool;
 import com.example.smilecare.tool.DoctorTool;
 import com.example.smilecare.tool.ScheduleTool;
 import com.example.smilecare.tool.ServiceTool;
@@ -15,9 +16,10 @@ public class ChatClientConfig {
     public ChatClient chatClient(ChatModel chatModel,
                                  DoctorTool doctorTool,
                                  ServiceTool serviceTool,
-                                 ScheduleTool scheduleTool) {
+                                 ScheduleTool scheduleTool,
+                                 AppointmentTool appointmentTool) {
         return ChatClient.builder(chatModel)
-                .defaultTools(doctorTool, serviceTool, scheduleTool)
+                .defaultTools(doctorTool, serviceTool, scheduleTool, appointmentTool)
                 .build();
     }
 }
